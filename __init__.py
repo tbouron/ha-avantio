@@ -8,7 +8,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import ConfigType
 
 from .client import AvantioClient
-from .const import DOMAIN
+from .const import CONF_USERNAME, CONF_PASSWORD, DOMAIN
 from .coordinator import AvantioCoordinator
 
 PLATFORMS: list[Platform] = [Platform.CALENDAR, Platform.SENSOR]
@@ -23,7 +23,7 @@ def setup(hass: HomeAssistant, config: ConfigType) -> bool:
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Travel Paradise from a config entry."""
     client = AvantioClient(
-        username=entry.data.get("username"), password=entry.data.get("password")
+        username=entry.data.get(CONF_USERNAME), password=entry.data.get(CONF_PASSWORD)
     )
 
     coordinator = AvantioCoordinator(hass, client)

@@ -21,17 +21,17 @@ from homeassistant.helpers.selector import (
 )
 
 from .client import AvantioClient, CannotConnect, InvalidAuth
-from .const import DOMAIN
+from .const import CONF_PASSWORD, CONF_USERNAME, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
-        vol.Required("username"): TextSelector(
-            TextSelectorConfig(type=TextSelectorType.EMAIL, autocomplete="username")
+        vol.Required(CONF_USERNAME): TextSelector(
+            TextSelectorConfig(type=TextSelectorType.EMAIL, autocomplete=CONF_USERNAME)
         ),
-        vol.Required("password"): TextSelector(
-            TextSelectorConfig(type=TextSelectorType.PASSWORD, autocomplete="password")
+        vol.Required(CONF_PASSWORD): TextSelector(
+            TextSelectorConfig(type=TextSelectorType.PASSWORD, autocomplete=CONF_PASSWORD)
         ),
     }
 )
@@ -39,7 +39,7 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
 
 async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> None:
     """Validate the user input allows us to connect."""
-    client = AvantioClient(username=data["username"], password=data["password"])
+    client = AvantioClient(username=data[CONF_USERNAME], password=data[CONF_PASSWORD])
     is_signed_in = await client.sign_in()
     await client.close()
 
@@ -107,16 +107,16 @@ class AvantioOptionsFlow(OptionsFlow):
         """Manage the options."""
         if user_input is not None:
             return self.async_create_entry(
-                title=user_input["username"], data=user_input
+                title=user_input[CONF_USERNAME], data=user_input
             )
 
         options_schema = vol.Schema(
             {
                 vol.Required(
-                    "username", default=self.config_entry.data.get("username", "")
+                    CONF_USERNAME, default=self.config_entry.data.get(CONF_USERNAME, "")
                 ): str,
                 vol.Required(
-                    "password", default=self.config_entry.data.get("password", "")
+                    CONF_PASSWORD, default=self.config_entry.data.get(CONF_PASSWORD, "")
                 ): str,
             }
         )

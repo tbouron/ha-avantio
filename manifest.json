@@ -1,8 +1,8 @@
 {
-  "domain": "ha_avantio",
+  "domain": "avantio",
   "name": "Avantio",
   "config_flow": true,
-  "documentation": "https://www.home-assistant.io/integrations/ha_avantio",
+  "documentation": "https://www.home-assistant.io/integrations/avantio",
   "requirements": [
     "beautifulsoup4==4.12.3"
   ],
