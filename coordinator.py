@@ -139,7 +139,7 @@ def stringify_guests(guests: dict) -> str:
     num_adults = guests.get("numAdults", 0)
     num_children = guests.get("numChildren", 0)
     num_babies = guests.get("numBabies", 0)
-    children_ages = guests.get("childrenAges", [])
+    children_ages = [age for age in guests.get("childrenAges", []) if age > 0]
 
     parts = []
 
