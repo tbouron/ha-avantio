@@ -29,12 +29,14 @@ async def async_setup_entry(
                     translation_key="rental",
                     coordinator=coordinator,
                     unique_id=f"{accommodation['id']}_rental",
+                    icon="mdi:calendar-check-outline",
                     for_rental=True,
                 ),
                 BookingCalendar(
                     translation_key="owner",
                     coordinator=coordinator,
                     unique_id=f"{accommodation['id']}_owner",
+                    icon="mdi:calendar-account-outline",
                     for_rental=False,
                 ),
             ],
@@ -52,17 +54,18 @@ class BookingCalendar(CoordinatorEntity[AvantioCoordinator], CalendarEntity):
         translation_key: str,
         coordinator: AvantioCoordinator,
         unique_id: str | None = None,
+        icon: str | None = None,
         for_rental: bool = True,
     ) -> None:
         """Create the bookings calendar, with all its events."""
         super().__init__(coordinator)
         self.entity_id = f"{Platform.CALENDAR}.{DOMAIN}_{unique_id}"
-        self._events: list[CalendarEvent] = []
-        self._event: CalendarEvent | None = None
-        self._attr_translation_key = translation_key
-        # self._attr_name = name
         if unique_id is not None:
             self._attr_unique_id = unique_id
+        self._attr_translation_key = translation_key
+        self._attr_icon = icon
+        self._events: list[CalendarEvent] = []
+        self._event: CalendarEvent | None = None
         self._for_rental = for_rental
 
     @callback
