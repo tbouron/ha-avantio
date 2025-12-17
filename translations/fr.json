@@ -1,0 +1,35 @@
+{
+    "config": {
+        "abort": {
+            "already_configured": "L'appareil est déjà configuré"
+        },
+        "error": {
+            "cannot_connect": "Impossible de se connecter",
+            "invalid_auth": "Authentification invalide",
+            "unknown": "Une erreur inconnue s'est produite"
+        },
+        "step": {
+            "user": {
+                "data": {
+                    "password": "Mot de passe",
+                    "username": "Nom d'utilisateur"
+                }
+            }
+        }
+    },
+    "entity": {
+        "calendar": {
+            "rental": {
+                "name": "Réservations locataire"
+            },
+            "owner": {
+                "name": "Réservations propriétaire"
+            }
+        },
+        "sensor": {
+            "total_earnings": {
+                "name": "Revenus"
+            }
+        }
+    }
+}
