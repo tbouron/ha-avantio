@@ -64,7 +64,9 @@ class AvantioCoordinator(DataUpdateCoordinator):
                     "description": "\n".join(
                         [
                             f"🧑‍🧑‍🧒‍🧒 {stringify_guests(row['guests'])}",
-                            f"💸 {row['amount']}",
+                            f"💸 {row['amount']}"
+                            if row["status"]["name"] != "PROPIETARIO"
+                            else "",
                             "",
                             f"Réservé via {row['agent']['name']}"
                             if row["agent"]["name"] != ""
