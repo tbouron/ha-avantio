@@ -80,6 +80,87 @@ class AvantioClient:
         _LOGGER.info("Failed to logged to %s", self._base_url)
         return False
 
+    async def pagination(self, booking_data: dict, data_path: str = "list", max_items: int = 50) -> list | None:
+        """Paginate an Avantio Ajax endpoint.
+
+        booking_data: dict containing keys like `module`, `action`, `functionName`, and `params` (JSON string).
+        data_path: dot-separated path to the items in the JSON response (default: "list").
+
+        Returns the aggregated list of items or None on failure.
+        """
+        if self._session is None:
+            if await self.sign_in() is False:
+                _LOGGER.error("Failed to paginate: not signed in")
+                return None
+
+        def _extract_path(obj: dict, path: str):
+            if not path:
+                return obj
+            cur = obj
+            for part in path.split("."):
+                if not isinstance(cur, dict):
+                    return None
+                cur = cur.get(part)
+                if cur is None:
+                    return None
+            return cur
+
+        # parse initial params
+        try:
+            params_obj = json.loads(booking_data.get("params", "{}"))
+        except Exception:
+            params_obj = {}
+
+        offset = int(params_obj.get("offset", 0))
+        limit = int(params_obj.get("limit", max_items))
+        results: list = []
+
+        has_next = True
+
+        while has_next:
+            params_obj["offset"] = offset
+            params_obj["limit"] = limit
+            booking_data["params"] = json.dumps(params_obj)
+
+            with aiohttp.MultipartWriter("form-data") as mp:
+                for key, value in booking_data.items():
+                    part = mp.append(value)
+                    part.set_content_disposition("form-data", name=key)
+                async with self._session.post(
+                    f"{self._base_url}/index.php",
+                    data=mp,
+                ) as response:
+                    if response.status != 200:
+                        _LOGGER.error(
+                            "Failed to paginate: unexpected response status %s",
+                            response.status,
+                        )
+                        if response.status == 403:
+                            raise InvalidAuth
+                        return None
+
+                    text = await response.text()
+                    try:
+                        data = json.loads(text)
+                    except Exception:
+                        _LOGGER.error("Failed to decode paginated JSON response")
+                        return None
+
+                    items = _extract_path(data, data_path) or []
+                    if not isinstance(items, list):
+                        _LOGGER.error("Paginated data at path %s is not a list", data_path)
+                        return None
+
+                    results.extend(items)
+
+                    pagination_obj = data.get("pagination")
+                    has_next = False if not pagination_obj else bool(pagination_obj.get("hasNextPage", False))
+                    # use total as next offset per request
+                    offset = int(pagination_obj.get("total", 0))
+
+        # unreachable
+        return results
+
     async def get_bookings(self):
         """Get the bookings for the currently logged user."""
         if self._session is None:
@@ -92,34 +173,10 @@ class AvantioClient:
             "module": "Compromisos",
             "action": "Ajax",
             "functionName": "fetchOwnerBookings",
-            "params": '{"dateCheckType":"CHECKIN","dateRequest":"12MONTHS","sort":"RECENT_TO_OLDEST_CHECKIN","status":["UNPAID","CONFIRMADA","BAJOPETICION","PROPIETARIO","PAID"]}',
+            "params": '{"dateCheckType":"CHECKIN","sort":"RECENT_TO_OLDEST_CHECKIN","status":["UNPAID","CONFIRMADA","BAJOPETICION","PROPIETARIO","PAID"]}',
         }
-
-        with aiohttp.MultipartWriter("form-data") as mp:
-            for key, value in booking_data.items():
-                part = mp.append(value)
-                part.set_content_disposition("form-data", name=key)
-            async with self._session.post(
-                f"{self._base_url}/index.php",
-                data=mp,
-            ) as bookings_response:
-                if bookings_response.status == 200:
-                    text = await bookings_response.text()
-                    _LOGGER.info(
-                        "Successfully fetched bookings from %s", self._base_url
-                    )
-                    _LOGGER.info(text)
-                    return json.loads(text).get("list")
-
-                _LOGGER.error(
-                    "Failed to fetch bookings: unexpected response received => status code: %s",
-                    bookings_response.status,
-                )
-
-                if bookings_response.status == 403:
-                    raise InvalidAuth
-
-        return None
+        # use shared pagination helper to aggregate all pages
+        return await self.pagination(booking_data, data_path="list")
 
     async def get_accommodations(self):
         """Get all accommodation for the currently logged user."""
@@ -132,35 +189,10 @@ class AvantioClient:
         booking_data = {
             "module": "PlanningPropietarios",
             "action": "Ajax",
-            "functionName": "fetchAccommodations",
-            "params": '{"offset":0,"limit":50}',
+            "functionName": "fetchAccommodations"
         }
-
-        with aiohttp.MultipartWriter("form-data") as mp:
-            for key, value in booking_data.items():
-                part = mp.append(value)
-                part.set_content_disposition("form-data", name=key)
-            async with self._session.post(
-                f"{self._base_url}/index.php",
-                data=mp,
-            ) as accommodations_response:
-                if accommodations_response.status == 200:
-                    text = await accommodations_response.text()
-                    _LOGGER.info(
-                        "Successfully fetched accommodations from %s", self._base_url
-                    )
-                    _LOGGER.info(text)
-                    return json.loads(text).get("accommodations")
-
-                _LOGGER.error(
-                    "Failed to fetch accommodations: unexpected response received => status code: %s",
-                    accommodations_response.status,
-                )
-
-                if accommodations_response.status == 403:
-                    raise InvalidAuth
-
-        return None
+        # use shared pagination helper to aggregate all pages
+        return await self.pagination(booking_data, data_path="accommodations")
 
     async def close(self):
         """Close the client session."""
