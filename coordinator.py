@@ -35,15 +35,8 @@ class AvantioCoordinator(DataUpdateCoordinator):
 
     async def _async_setup(self):
         """Set up the coordinator."""
-        if await self._client.sign_in():
-            await self.async_request_refresh()
-            return True
-
-        return False
-
-    async def async_cleanup(self):
-        """Clean up the open sessions from the client."""
-        await self._client.close()
+        await self.async_request_refresh()
+        return True
 
     async def _async_update_data(self):
         """Fetch data from API endpoint.

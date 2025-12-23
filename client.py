@@ -1,29 +1,28 @@
 """Unofficial client to Avantio, which reverse-engineer the API calls of the platform app.avantio.com."""
 
+import aiohttp
 import json
 import logging
-
-import aiohttp
 from bs4 import BeautifulSoup
-
 from homeassistant.exceptions import HomeAssistantError
 
 # Create a logger instance
 _LOGGER = logging.getLogger(__name__)
+
+MAX_RETRIES = 3
 
 
 class AvantioClient:
     """Utility class to communicate with avantio "API"."""
 
     def __init__(
-        self, username: str, password: str, base_url: str = "https://app.avantio.pro"
+            self, username: str, password: str, base_url: str = "https://app.avantio.pro"
     ) -> None:
         """Initialise the client."""
         self._username = username
         self._password = password
         self._base_url = base_url
         self._login_url = f"{self._base_url}/index.php"
-        self._session = None
         self._base_headers = {
             "User-Agent": "Mozilla/5.0",
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
@@ -32,16 +31,16 @@ class AvantioClient:
             "Connection": "keep-alive",
             "Upgrade-Insecure-Requests": "1",
             "Referer": "https://app.avantio.pro/index.php?firstAcces=1&module=Compromisos&action=ListViewPropietarios&return_module=Compromisos&return_action=index&avs=aExPNzV4UHhxTE85aTUxRStYd2diUUlVVmZvRUw1YXpGMk1QWTg0dmo4eHJSZE00OUtmK2RhWSs3akJ2UW4zYnlsTkdobm1saE5KWjNMUFoyVXU2aHFBN3k5RVZmK2ZYSXFFU3daZVJ5VkpWNVNnV0tjU3RCdW9WeEhIWFpBVzliNmJUKzdiOTZwNUthd3d1eE05clhBPT0%253D",
-            "Origin": "https://app.avantio.pro",
+            "Origin": " ",
         }
 
-    async def sign_in(self) -> bool:
-        """Sign in a user and store cookies into the embedded session."""
-        if self._session is None:
-            self._session = aiohttp.ClientSession(headers=self._base_headers)
+    def is_logged_out(self, response_url) -> bool:
+        return True if "action=Login" in str(response_url) else False
 
+    async def sign_in(self, session) -> bool:
+        """Sign in a user and store cookies into the embedded session."""
         _LOGGER.debug("Signing in to %s", self._base_url)
-        async with self._session.get(self._login_url) as init_response:
+        async with session.get(self._login_url) as init_response:
             soup = BeautifulSoup(await init_response.text(), features="html.parser")
             tag = soup.find(
                 "input", attrs={"name": "csrftoken", "type": "hidden"}
@@ -67,8 +66,8 @@ class AvantioClient:
             for key, value in login_data.items():
                 part = mp.append(value)
                 part.set_content_disposition("form-data", name=key)
-            async with self._session.post(
-                f"{self._base_url}/index.php", data=mp, headers=self._base_headers
+            async with session.post(
+                    f"{self._base_url}/index.php", data=mp, headers=self._base_headers
             ) as login_response:
                 if "module=Home" in str(login_response.url):
                     _LOGGER.info("Successfully logged to %s", self._base_url)
@@ -80,7 +79,8 @@ class AvantioClient:
         _LOGGER.info("Failed to logged to %s", self._base_url)
         return False
 
-    async def pagination(self, booking_data: dict, data_path: str = "list", max_items: int = 50) -> list | None:
+    async def pagination(self, session, booking_data: dict, data_path: str = "list", max_items: int = 50,
+                         retries: int = 0) -> list | None:
         """Paginate an Avantio Ajax endpoint.
 
         booking_data: dict containing keys like `module`, `action`, `functionName`, and `params` (JSON string).
@@ -88,10 +88,9 @@ class AvantioClient:
 
         Returns the aggregated list of items or None on failure.
         """
-        if self._session is None:
-            if await self.sign_in() is False:
-                _LOGGER.error("Failed to paginate: not signed in")
-                return None
+        if await self.sign_in(session) is False:
+            _LOGGER.error("Failed to paginate: not signed in")
+            return None
 
         def _extract_path(obj: dict, path: str):
             if not path:
@@ -126,10 +125,16 @@ class AvantioClient:
                 for key, value in booking_data.items():
                     part = mp.append(value)
                     part.set_content_disposition("form-data", name=key)
-                async with self._session.post(
-                    f"{self._base_url}/index.php",
-                    data=mp,
+                async with session.post(
+                        f"{self._base_url}/index.php",
+                        data=mp,
                 ) as response:
+                    if self.is_logged_out(response.url) and retries < MAX_RETRIES:
+                        _LOGGER.warning(
+                            f"Logged-out of avantio. Closing session and retrying (retry #{retries + 1})...")
+                        return await self.pagination(session=session, booking_data=booking_data, data_path=data_path,
+                                                     max_items=max_items, retries=retries + 1)
+
                     if response.status != 200:
                         _LOGGER.error(
                             "Failed to paginate: unexpected response status %s",
@@ -162,12 +167,6 @@ class AvantioClient:
         return results
 
     async def get_bookings(self):
-        """Get the bookings for the currently logged user."""
-        if self._session is None:
-            if await self.sign_in() is False:
-                _LOGGER.error("Failed to fetch booking: not signed in")
-                return None
-
         _LOGGER.debug("Fetching bookings from %s", self._base_url)
         booking_data = {
             "module": "Compromisos",
@@ -175,30 +174,22 @@ class AvantioClient:
             "functionName": "fetchOwnerBookings",
             "params": '{"dateCheckType":"CHECKIN","sort":"RECENT_TO_OLDEST_CHECKIN","status":["UNPAID","CONFIRMADA","BAJOPETICION","PROPIETARIO","PAID"]}',
         }
-        # use shared pagination helper to aggregate all pages
-        return await self.pagination(booking_data, data_path="list")
+
+        async with aiohttp.ClientSession(headers=self._base_headers) as session:
+            # use shared pagination helper to aggregate all pages
+            return await self.pagination(session=session, booking_data=booking_data, data_path="list")
 
     async def get_accommodations(self):
-        """Get all accommodation for the currently logged user."""
-        if self._session is None:
-            if await self.sign_in() is False:
-                _LOGGER.error("Failed to fetch accommodations: not signed in")
-                return None
-
         _LOGGER.debug("Fetching accommodations from %s", self._base_url)
         booking_data = {
             "module": "PlanningPropietarios",
             "action": "Ajax",
             "functionName": "fetchAccommodations"
         }
-        # use shared pagination helper to aggregate all pages
-        return await self.pagination(booking_data, data_path="accommodations")
 
-    async def close(self):
-        """Close the client session."""
-        if self._session:
-            await self._session.close()
-            self._session = None
+        async with aiohttp.ClientSession(headers=self._base_headers) as session:
+            # use shared pagination helper to aggregate all pages
+            return await self.pagination(session=session, booking_data=booking_data, data_path="accommodations")
 
 
 class CannotConnect(HomeAssistantError):
