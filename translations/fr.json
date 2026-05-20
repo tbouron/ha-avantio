@@ -29,6 +29,12 @@
         "sensor": {
             "total_earnings": {
                 "name": "Revenus"
+            },
+            "rental_days": {
+                "name": "Jours loués"
+            },
+            "owner_days": {
+                "name": "Jours propriétaire"
             }
         }
     }

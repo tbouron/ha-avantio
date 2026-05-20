@@ -26,7 +26,8 @@ async def async_setup_entry(
     for accommodation in coordinator.get_accommodations():
         acc_id = accommodation["id"]
         entities.append(TotalEarningsSensor(coordinator=coordinator, unique_id=f"{acc_id}_total_earnings"))
-        entities.append(RentalDaysSensor(coordinator=coordinator, unique_id=f"{acc_id}_rental_days"))
+        entities.append(BookingDaysSensor(coordinator=coordinator, unique_id=f"{acc_id}_rental_days", for_rental=True))
+        entities.append(BookingDaysSensor(coordinator=coordinator, unique_id=f"{acc_id}_owner_days", for_rental=False))
 
     async_add_entities(entities, True)
     await coordinator.async_request_refresh()
@@ -62,23 +63,25 @@ class TotalEarningsSensor(CoordinatorEntity, SensorEntity):
         }
 
 
-class RentalDaysSensor(CoordinatorEntity, SensorEntity):
-    """Sensor showing total rental days with a per-year/month breakdown."""
+class BookingDaysSensor(CoordinatorEntity, SensorEntity):
+    """Sensor showing total booking days with a per-year/month breakdown."""
 
     coordinator: AvantioCoordinator
     _attr_has_entity_name = True
     _attr_native_unit_of_measurement = "d"
 
-    def __init__(self, coordinator: AvantioCoordinator, unique_id: str) -> None:
+    def __init__(self, coordinator: AvantioCoordinator, unique_id: str, for_rental: bool) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator)
         self.entity_id = f"{Platform.SENSOR}.{DOMAIN}_{unique_id}"
         self._attr_unique_id = unique_id
-        self._attr_translation_key = "rental_days"
+        self._attr_translation_key = "rental_days" if for_rental else "owner_days"
+        self._for_rental = for_rental
 
     def _monthly_breakdown(self) -> dict[int, dict[int, int]]:
+        events = self.coordinator.get_bookings_guests() if self._for_rental else self.coordinator.get_bookings_owner()
         result: dict[tuple[int, int], int] = defaultdict(int)
-        for event in self.coordinator.get_bookings_guests():
+        for event in events:
             current = event["start"].date()
             end = event["end"].date()
             while current < end:
@@ -91,7 +94,7 @@ class RentalDaysSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def state(self):
-        """Return total rental days across all time."""
+        """Return total booking days across all time."""
         breakdown = self._monthly_breakdown()
         return sum(days for months in breakdown.values() for days in months.values())
 

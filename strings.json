@@ -6,6 +6,9 @@
       },
       "rental_days": {
         "name": "Rental Days"
+      },
+      "owner_days": {
+        "name": "Owner Days"
       }
     }
   },
