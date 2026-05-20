@@ -1,4 +1,14 @@
 {
+  "entity": {
+    "sensor": {
+      "total_earnings": {
+        "name": "Total Earnings"
+      },
+      "rental_days": {
+        "name": "Rental Days"
+      }
+    }
+  },
   "config": {
     "step": {
       "user": {
