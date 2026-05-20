@@ -12,6 +12,12 @@
       }
     }
   },
+  "notifications": {
+    "new_booking": {
+      "title": "New booking",
+      "message": "From {start} to {end}"
+    }
+  },
   "config": {
     "step": {
       "user": {

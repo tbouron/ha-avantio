@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.helpers.translation import async_get_cached_translations
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .client import AvantioClient, InvalidAuth
@@ -32,6 +33,7 @@ class AvantioCoordinator(DataUpdateCoordinator):
         self._total_earnings = None
         self._yearly_earnings = None
         self._accommodations = None
+        self._known_uids: set[str] = set()
 
     async def _async_setup(self):
         """Set up the coordinator."""
@@ -87,6 +89,28 @@ class AvantioCoordinator(DataUpdateCoordinator):
             self._yearly_earnings = dict(yearly_earnings)
 
             self._accommodations = await self._client.get_accommodations()
+
+            new_rentals = [
+                e for e in self._events
+                if e["is_rental"] and e["uid"] not in self._known_uids
+            ]
+            if self._known_uids:
+                for event in new_rentals:
+                    translations = async_get_cached_translations(
+                        self.hass, self.hass.config.language, "notifications", DOMAIN
+                    )
+                    title = translations.get("component.avantio.notifications.new_booking.title", "🏠 New booking")
+                    message_tpl = translations.get("component.avantio.notifications.new_booking.message", "From {start} to {end}")
+                    message = message_tpl.format(
+                        start=event["start"].strftime("%d %b %Y"),
+                        end=event["end"].strftime("%d %b %Y"),
+                    )
+                    self.hass.components.persistent_notification.async_create(
+                        message=message,
+                        title=title,
+                        notification_id=f"avantio_new_booking_{event['uid']}",
+                    )
+            self._known_uids = {e["uid"] for e in self._events}
         except InvalidAuth as err:
             raise ConfigEntryAuthFailed(
                 f"Credentials expired for {self.config_entry.entry_id}"

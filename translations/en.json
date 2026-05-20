@@ -1,4 +1,10 @@
 {
+    "notifications": {
+        "new_booking": {
+            "title": "🏠 New booking",
+            "message": "From {start} to {end}"
+        }
+    },
     "config": {
         "abort": {
             "already_configured": "Device is already configured"
