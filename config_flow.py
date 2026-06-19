@@ -39,9 +39,11 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
 
 async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> None:
     """Validate the user input allows us to connect."""
+    import aiohttp
+
     client = AvantioClient(username=data[CONF_USERNAME], password=data[CONF_PASSWORD])
-    is_signed_in = await client.sign_in()
-    await client.close()
+    async with aiohttp.ClientSession() as session:
+        is_signed_in = await client.sign_in(session)
 
     if is_signed_in is False:
         raise InvalidAuth
@@ -93,15 +95,11 @@ class AvantioConfigFlow(ConfigFlow, domain=DOMAIN):
     @callback
     def async_get_options_flow(config_entry: ConfigEntry) -> AvantioOptionsFlow:
         """Set the option flow to reconfigure the integration, for the given ConfigEntry."""
-        return AvantioOptionsFlow(config_entry)
+        return AvantioOptionsFlow()
 
 
 class AvantioOptionsFlow(OptionsFlow):
     """Handle an options flow for Travel Paradise."""
-
-    def __init__(self, config_entry: ConfigEntry) -> None:
-        """Initialize the options flow."""
-        self.config_entry = config_entry
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None):
         """Manage the options."""

@@ -23,6 +23,16 @@
             }
         }
     },
+    "options": {
+        "step": {
+            "init": {
+                "data": {
+                    "password": "Password",
+                    "username": "Username"
+                }
+            }
+        }
+    },
     "entity": {
         "calendar": {
             "rental": {
