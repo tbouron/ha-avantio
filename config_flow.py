@@ -68,6 +68,11 @@ class AvantioConfigFlow(ConfigFlow, domain=DOMAIN):
                 _LOGGER.exception("Unexpected exception")
                 errors["base"] = "unknown"
             else:
+                if self.source == "reauth":
+                    entry = self._get_reauth_entry()
+                    return self.async_update_reload_and_abort(
+                        entry, data=user_input
+                    )
                 return self.async_create_entry(
                     title=user_input["username"], data=user_input
                 )
@@ -78,17 +83,6 @@ class AvantioConfigFlow(ConfigFlow, domain=DOMAIN):
 
     async def async_step_reauth(self, entry_data: dict[str, Any]) -> ConfigFlowResult:
         """Perform reauth upon an API authentication error."""
-        return await self.async_step_reauth_confirm()
-
-    async def async_step_reauth_confirm(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        """Dialog that informs the user that reauth is required."""
-        if user_input is None:
-            return self.async_show_form(
-                step_id="reauth_confirm",
-                data_schema=vol.Schema({}),
-            )
         return await self.async_step_user()
 
     @staticmethod
