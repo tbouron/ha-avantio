@@ -52,6 +52,14 @@
             },
             "owner_days": {
                 "name": "Jours propriétaire"
+            },
+            "last_sync": {
+                "name": "Dernière synchronisation"
+            }
+        },
+        "binary_sensor": {
+            "sync_problem": {
+                "name": "Problème de synchronisation"
             }
         }
     }

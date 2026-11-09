@@ -9,6 +9,14 @@
       },
       "owner_days": {
         "name": "Owner Days"
+      },
+      "last_sync": {
+        "name": "Last sync"
+      }
+    },
+    "binary_sensor": {
+      "sync_problem": {
+        "name": "Sync problem"
       }
     }
   },

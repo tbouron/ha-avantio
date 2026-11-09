@@ -34,3 +34,9 @@ _spec = importlib.util.spec_from_file_location("avantio_client", REPO_ROOT / "cl
 avantio_client = importlib.util.module_from_spec(_spec)
 sys.modules["avantio_client"] = avantio_client
 _spec.loader.exec_module(avantio_client)
+
+# model.py has no Home Assistant imports, so it loads the same way.
+_model_spec = importlib.util.spec_from_file_location("avantio_model", REPO_ROOT / "model.py")
+avantio_model = importlib.util.module_from_spec(_model_spec)
+sys.modules["avantio_model"] = avantio_model
+_model_spec.loader.exec_module(avantio_model)

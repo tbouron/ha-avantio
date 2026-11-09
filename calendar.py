@@ -6,12 +6,12 @@ from zoneinfo import ZoneInfo
 from homeassistant.components.calendar import CalendarEntity, CalendarEvent
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import AvantioCoordinator
+from .entity import AvantioEntity
 
 
 async def async_setup_entry(
@@ -22,61 +22,61 @@ async def async_setup_entry(
     """Set up the calendar platform from a config entry."""
     coordinator: AvantioCoordinator = hass.data[DOMAIN][entry.entry_id]
 
-    for accommodation in coordinator.get_accommodations():
-        async_add_entities(
-            [
-                BookingCalendar(
-                    translation_key="rental",
-                    coordinator=coordinator,
-                    unique_id=f"{accommodation['id']}_rental",
-                    icon="mdi:calendar-check-outline",
-                    for_rental=True,
-                ),
-                BookingCalendar(
-                    translation_key="owner",
-                    coordinator=coordinator,
-                    unique_id=f"{accommodation['id']}_owner",
-                    icon="mdi:calendar-account-outline",
-                    for_rental=False,
-                ),
-            ],
-            True,
-        )
+    async_add_entities(
+        [
+            BookingCalendar(
+                translation_key=translation_key,
+                coordinator=coordinator,
+                accommodation=accommodation,
+                unique_id=f"{accommodation['id']}_{translation_key}",
+                icon=icon,
+                for_rental=for_rental,
+            )
+            for accommodation in coordinator.get_accommodations()
+            for translation_key, icon, for_rental in (
+                ("rental", "mdi:calendar-check-outline", True),
+                ("owner", "mdi:calendar-account-outline", False),
+            )
+        ]
+    )
 
 
-class BookingCalendar(CoordinatorEntity[AvantioCoordinator], CalendarEntity):
+class BookingCalendar(AvantioEntity, CalendarEntity):
     """BookingCalendar is a class that represents a calendar entity for booking events."""
-
-    _attr_has_entity_name = True
 
     def __init__(
         self,
         translation_key: str,
         coordinator: AvantioCoordinator,
+        accommodation: dict,
         unique_id: str | None = None,
         icon: str | None = None,
         for_rental: bool = True,
     ) -> None:
         """Create the bookings calendar, with all its events."""
-        super().__init__(coordinator)
+        super().__init__(coordinator, accommodation)
         self.entity_id = f"{Platform.CALENDAR}.{DOMAIN}_{unique_id}"
         if unique_id is not None:
             self._attr_unique_id = unique_id
         self._attr_translation_key = translation_key
         self._attr_icon = icon
-        self._events: list[CalendarEvent] = []
-        self._event: CalendarEvent | None = None
         self._for_rental = for_rental
 
-    @callback
-    def _handle_coordinator_update(self) -> None:
-        """Handle updated data from the coordinator."""
-        self._events = [
-            CalendarEvent(**{k: v for k, v in event_data.items() if k != "is_rental"})
-            for event_data in self.coordinator.get_bookings()
-            if event_data["is_rental"] is self._for_rental
+    @property
+    def _events(self) -> list[CalendarEvent]:
+        """Build the events from the coordinator's data, cached or fresh."""
+        return [
+            CalendarEvent(
+                **{
+                    k: v
+                    for k, v in event_data.items()
+                    if k not in ("is_rental", "accommodation_id")
+                }
+            )
+            for event_data in self.coordinator.get_events(
+                self._accommodation_id, self._for_rental
+            )
         ]
-        self.async_write_ha_state()
 
     async def async_get_events(
         self,
@@ -90,9 +90,6 @@ class BookingCalendar(CoordinatorEntity[AvantioCoordinator], CalendarEntity):
     @property
     def event(self) -> CalendarEvent | None:
         """Return the next upcoming event."""
-        if not self._events:
-            return None
-
         now = datetime.datetime.now(ZoneInfo(self.coordinator.hass.config.time_zone))
         upcoming_events = [event for event in self._events if event.start > now]
         upcoming_events.sort(key=lambda event: event.start)

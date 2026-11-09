@@ -1,17 +1,22 @@
 """Add sensor entities for a given HomeAssistant ConfigEntry."""
 
-from collections import defaultdict
-from datetime import timedelta
+from __future__ import annotations
 
-from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
+from datetime import datetime
+
+from homeassistant.components.sensor import (
+    SensorDeviceClass,
+    SensorEntity,
+    SensorStateClass,
+)
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EntityCategory, Platform, UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.entity_registry import Platform
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import AvantioCoordinator
+from .entity import AvantioEntity, AvantioSyncEntity
 
 
 async def async_setup_entry(
@@ -22,83 +27,85 @@ async def async_setup_entry(
     """Set up the sensor platform from a config entry."""
     coordinator: AvantioCoordinator = hass.data[DOMAIN][entry.entry_id]
 
-    entities = []
+    entities: list[SensorEntity] = [
+        LastSyncSensor(coordinator=coordinator, unique_id=f"{entry.entry_id}_last_sync")
+    ]
     for accommodation in coordinator.get_accommodations():
         acc_id = accommodation["id"]
-        entities.append(TotalEarningsSensor(coordinator=coordinator, unique_id=f"{acc_id}_total_earnings"))
-        entities.append(BookingDaysSensor(coordinator=coordinator, unique_id=f"{acc_id}_rental_days", for_rental=True))
-        entities.append(BookingDaysSensor(coordinator=coordinator, unique_id=f"{acc_id}_owner_days", for_rental=False))
+        entities.append(TotalEarningsSensor(coordinator, accommodation, unique_id=f"{acc_id}_total_earnings"))
+        entities.append(BookingDaysSensor(coordinator, accommodation, unique_id=f"{acc_id}_rental_days", for_rental=True))
+        entities.append(BookingDaysSensor(coordinator, accommodation, unique_id=f"{acc_id}_owner_days", for_rental=False))
 
-    async_add_entities(entities, True)
-    await coordinator.async_request_refresh()
+    async_add_entities(entities)
 
 
-class TotalEarningsSensor(CoordinatorEntity, SensorEntity):
+class TotalEarningsSensor(AvantioEntity, SensorEntity):
     """Representation of a Sensor that shows the total earnings."""
 
-    coordinator: AvantioCoordinator
-    _attr_has_entity_name = True
+    _attr_translation_key = "total_earnings"
+    _attr_device_class = SensorDeviceClass.MONETARY
+    _attr_state_class = SensorStateClass.TOTAL
+    _attr_native_unit_of_measurement = "€"
 
-    def __init__(self, coordinator: AvantioCoordinator, unique_id: str) -> None:
+    def __init__(self, coordinator: AvantioCoordinator, accommodation: dict, unique_id: str) -> None:
         """Initialize the sensor."""
-        super().__init__(coordinator)
+        super().__init__(coordinator, accommodation)
         self.entity_id = f"{Platform.SENSOR}.{DOMAIN}_{unique_id}"
-        self._attr_translation_key = "total_earnings"
-        if unique_id is not None:
-            self._attr_unique_id = unique_id
-        self._attr_device_class = SensorDeviceClass.MONETARY
-        self._attr_native_unit_of_measurement = "€"
+        self._attr_unique_id = unique_id
 
     @property
-    def state(self):
-        """Return the state of the sensor."""
-        return self.coordinator.get_total_earnings()
+    def native_value(self) -> float | None:
+        """Return the total earnings."""
+        return self.coordinator.get_total_earnings(self._accommodation_id)
 
     @property
     def extra_state_attributes(self):
-        """Return the state attributes."""
+        """Return the earnings per year."""
         return {
-            year: f"{round(value, 2)} €"
-            for year, value in self.coordinator.get_yearly_earnings().items()
+            year: f"{value} €"
+            for year, value in self.coordinator.get_yearly_earnings(self._accommodation_id).items()
         }
 
 
-class BookingDaysSensor(CoordinatorEntity, SensorEntity):
+class BookingDaysSensor(AvantioEntity, SensorEntity):
     """Sensor showing total booking days with a per-year/month breakdown."""
 
-    coordinator: AvantioCoordinator
-    _attr_has_entity_name = True
-    _attr_native_unit_of_measurement = "d"
+    _attr_state_class = SensorStateClass.TOTAL
+    _attr_native_unit_of_measurement = UnitOfTime.DAYS
 
-    def __init__(self, coordinator: AvantioCoordinator, unique_id: str, for_rental: bool) -> None:
+    def __init__(self, coordinator: AvantioCoordinator, accommodation: dict, unique_id: str, for_rental: bool) -> None:
         """Initialize the sensor."""
-        super().__init__(coordinator)
+        super().__init__(coordinator, accommodation)
         self.entity_id = f"{Platform.SENSOR}.{DOMAIN}_{unique_id}"
         self._attr_unique_id = unique_id
         self._attr_translation_key = "rental_days" if for_rental else "owner_days"
         self._for_rental = for_rental
 
-    def _monthly_breakdown(self) -> dict[int, dict[int, int]]:
-        events = self.coordinator.get_bookings_guests() if self._for_rental else self.coordinator.get_bookings_owner()
-        result: dict[tuple[int, int], int] = defaultdict(int)
-        for event in events:
-            current = event["start"].date()
-            end = event["end"].date()
-            while current < end:
-                result[(current.year, current.month)] += 1
-                current += timedelta(days=1)
-        breakdown: dict[int, dict[int, int]] = {}
-        for (year, month), days in result.items():
-            breakdown.setdefault(year, {})[month] = days
-        return breakdown
-
     @property
-    def state(self):
+    def native_value(self) -> int:
         """Return total booking days across all time."""
-        breakdown = self._monthly_breakdown()
+        breakdown = self.coordinator.get_booked_days_by_month(self._accommodation_id, self._for_rental)
         return sum(days for months in breakdown.values() for days in months.values())
 
     @property
     def extra_state_attributes(self):
         """Return per-year, per-month breakdown."""
-        return {"breakdown": self._monthly_breakdown()}
+        return {"breakdown": self.coordinator.get_booked_days_by_month(self._accommodation_id, self._for_rental)}
+
+
+class LastSyncSensor(AvantioSyncEntity, SensorEntity):
+    """When the data shown by the other entities was last fetched from Avantio."""
+    _attr_translation_key = "last_sync"
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, coordinator: AvantioCoordinator, unique_id: str) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator)
+        self.entity_id = f"{Platform.SENSOR}.{DOMAIN}_last_sync"
+        self._attr_unique_id = unique_id
+
+    @property
+    def native_value(self) -> datetime | None:
+        """Return when the last successful sync happened."""
+        return self.coordinator.last_synced
