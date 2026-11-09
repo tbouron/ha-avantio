@@ -1,0 +1,4 @@
+aiohttp
+beautifulsoup4==4.12.3
+pytest
+pytest-asyncio
