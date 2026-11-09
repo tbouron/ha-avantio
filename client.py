@@ -24,7 +24,7 @@ class AvantioClient:
         self._base_url = base_url
         self._login_url = f"{self._base_url}/index.php"
         self._base_headers = {
-            "User-Agent": "Mozilla/5.0",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:146.0) Gecko/20100101 Firefox/146.0",
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.5",
             "Accept-Encoding": "gzip, deflate, br",
@@ -41,6 +41,11 @@ class AvantioClient:
         """Sign in a user and store cookies into the embedded session."""
         _LOGGER.debug("Signing in to %s", self._base_url)
         async with session.get(self._login_url) as init_response:
+            if init_response.status != 200:
+                server = init_response.headers.get("Server", "unknown")
+                raise CannotConnect(
+                    f"Login page returned HTTP {init_response.status} (server: {server})"
+                )
             soup = BeautifulSoup(await init_response.text(), features="html.parser")
             tag = soup.find(
                 "input", attrs={"name": "csrftoken", "type": "hidden"}
