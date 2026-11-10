@@ -5,7 +5,6 @@ from __future__ import annotations
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import ConfigType
 from homeassistant.helpers.storage import Store
 
 from .client import AvantioClient
@@ -14,12 +13,6 @@ from .coordinator import AvantioCoordinator
 from .model import CACHE_VERSION, storage_key
 
 PLATFORMS: list[Platform] = [Platform.BINARY_SENSOR, Platform.CALENDAR, Platform.SENSOR]
-
-
-def setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Your controller/hub specific code."""
-    hass.data.setdefault(DOMAIN, {})
-    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

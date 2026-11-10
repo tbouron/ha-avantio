@@ -1,4 +1,4 @@
 {
-    "name": "Avantio",
-    "content_in_root": true
+  "name": "Avantio",
+  "render_readme": true
 }

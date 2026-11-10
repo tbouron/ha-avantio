@@ -20,12 +20,6 @@
       }
     }
   },
-  "notifications": {
-    "new_booking": {
-      "title": "New booking",
-      "message": "From {start} to {end}"
-    }
-  },
   "config": {
     "step": {
       "user": {
@@ -53,6 +47,14 @@
           "password": "[%key:common::config_flow::data::password%]"
         }
       }
+    }
+  },
+  "exceptions": {
+    "new_booking_title": {
+      "message": "New booking"
+    },
+    "new_booking_message": {
+      "message": "From {start} to {end}"
     }
   }
 }

@@ -1,0 +1,16 @@
+{
+  "domain": "avantio",
+  "name": "Avantio",
+  "codeowners": [
+    "@tbouron"
+  ],
+  "config_flow": true,
+  "documentation": "https://github.com/tbouron/ha-avantio",
+  "integration_type": "service",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/tbouron/ha-avantio/issues",
+  "requirements": [
+    "beautifulsoup4>=4.12.3"
+  ],
+  "version": "0.1.0"
+}

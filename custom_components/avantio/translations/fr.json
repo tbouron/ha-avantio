@@ -1,10 +1,4 @@
 {
-    "notifications": {
-        "new_booking": {
-            "title": "🏠 Nouvelle réservation",
-            "message": "Du {start} au {end}"
-        }
-    },
     "config": {
         "abort": {
             "already_configured": "L'appareil est déjà configuré",
@@ -61,6 +55,14 @@
             "sync_problem": {
                 "name": "Problème de synchronisation"
             }
+        }
+    },
+    "exceptions": {
+        "new_booking_title": {
+            "message": "🏠 Nouvelle réservation"
+        },
+        "new_booking_message": {
+            "message": "Du {start} au {end}"
         }
     }
 }

@@ -11,7 +11,7 @@ from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.storage import Store
-from homeassistant.helpers.translation import async_get_cached_translations
+from homeassistant.helpers.translation import async_get_translations
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
@@ -113,7 +113,7 @@ class AvantioCoordinator(DataUpdateCoordinator[dict | None]):
         notify = self.has_data
         self._use_snapshot(snapshot)
         if notify:
-            self._notify_new_bookings()
+            await self._async_notify_new_bookings()
         self._known_uids = {event["uid"] for event in self._events}
         await self._store.async_save(snapshot)
 
@@ -130,7 +130,7 @@ class AvantioCoordinator(DataUpdateCoordinator[dict | None]):
         timezone = ZoneInfo(self.hass.config.time_zone)
         self._events = booking_events(snapshot["bookings"], timezone)
 
-    def _notify_new_bookings(self) -> None:
+    async def _async_notify_new_bookings(self) -> None:
         """Create a notification for each rental not seen in a previous sync."""
         new_rentals = [
             event
@@ -139,15 +139,17 @@ class AvantioCoordinator(DataUpdateCoordinator[dict | None]):
         ]
         if not new_rentals:
             return
-        translations = async_get_cached_translations(
-            self.hass, self.hass.config.language, "notifications", DOMAIN
+        # Notification texts live under "exceptions", the only free-text
+        # category hassfest accepts in strings.json.
+        translations = await async_get_translations(
+            self.hass, self.hass.config.language, "exceptions", {DOMAIN}
         )
+        prefix = f"component.{DOMAIN}.exceptions"
         title = translations.get(
-            "component.avantio.notifications.new_booking.title", "🏠 New booking"
+            f"{prefix}.new_booking_title.message", "🏠 New booking"
         )
         message_tpl = translations.get(
-            "component.avantio.notifications.new_booking.message",
-            "From {start} to {end}",
+            f"{prefix}.new_booking_message.message", "From {start} to {end}"
         )
         for event in new_rentals:
             persistent_notification.async_create(
