@@ -1,4 +1,4 @@
-"""Config flow for Travel Paradise integration."""
+"""Config flow for the Avantio integration."""
 
 from __future__ import annotations
 
@@ -49,8 +49,24 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> None:
         raise InvalidAuth
 
 
+async def async_check_credentials(
+    hass: HomeAssistant, user_input: dict[str, Any]
+) -> dict[str, str]:
+    """Try to sign in, returning the form errors (empty when it worked)."""
+    try:
+        await validate_input(hass, user_input)
+    except CannotConnect:
+        return {"base": "cannot_connect"}
+    except InvalidAuth:
+        return {"base": "invalid_auth"}
+    except Exception:  # pylint: disable=broad-except
+        _LOGGER.exception("Unexpected exception")
+        return {"base": "unknown"}
+    return {}
+
+
 class AvantioConfigFlow(ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for Travel Paradise."""
+    """Handle a config flow for Avantio."""
 
     VERSION = 1
 
@@ -58,16 +74,8 @@ class AvantioConfigFlow(ConfigFlow, domain=DOMAIN):
         """Handle the initial step."""
         errors = {}
         if user_input is not None:
-            try:
-                await validate_input(self.hass, user_input)
-            except CannotConnect:
-                errors["base"] = "cannot_connect"
-            except InvalidAuth:
-                errors["base"] = "invalid_auth"
-            except Exception:  # pylint: disable=broad-except
-                _LOGGER.exception("Unexpected exception")
-                errors["base"] = "unknown"
-            else:
+            errors = await async_check_credentials(self.hass, user_input)
+            if not errors:
                 if self.source == "reauth":
                     entry = self._get_reauth_entry()
                     return self.async_update_reload_and_abort(
@@ -93,24 +101,32 @@ class AvantioConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class AvantioOptionsFlow(OptionsFlow):
-    """Handle an options flow for Travel Paradise."""
+    """Change the credentials of an Avantio account."""
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None):
-        """Manage the options."""
+        """Check the new credentials, then save them and reload the entry."""
+        errors = {}
         if user_input is not None:
-            return self.async_create_entry(
-                title=user_input[CONF_USERNAME], data=user_input
-            )
+            errors = await async_check_credentials(self.hass, user_input)
+            if not errors:
+                # The integration reads its credentials from the entry data,
+                # so store them there rather than in the options.
+                self.hass.config_entries.async_update_entry(
+                    self.config_entry,
+                    title=user_input[CONF_USERNAME],
+                    data={**self.config_entry.data, **user_input},
+                )
+                self.hass.config_entries.async_schedule_reload(
+                    self.config_entry.entry_id
+                )
+                return self.async_create_entry(data={})
 
-        options_schema = vol.Schema(
-            {
-                vol.Required(
-                    CONF_USERNAME, default=self.config_entry.data.get(CONF_USERNAME, "")
-                ): str,
-                vol.Required(
-                    CONF_PASSWORD, default=self.config_entry.data.get(CONF_PASSWORD, "")
-                ): str,
-            }
+        return self.async_show_form(
+            step_id="init",
+            data_schema=self.add_suggested_values_to_schema(
+                STEP_USER_DATA_SCHEMA,
+                user_input
+                or {CONF_USERNAME: self.config_entry.data.get(CONF_USERNAME, "")},
+            ),
+            errors=errors,
         )
-
-        return self.async_show_form(step_id="init", data_schema=options_schema)

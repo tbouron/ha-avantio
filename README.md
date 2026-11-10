@@ -16,6 +16,8 @@ them as calendars and sensors, one device per accommodation.
 | Username / password | Your Avantio owner portal account. |
 
 - **Re-authenticate** is offered automatically when Avantio rejects the credentials.
+- **Options** change the username or password. The new credentials are checked against Avantio before they are
+  saved, then the integration reloads.
 
 Data syncs once a day. A failed sync is retried every hour, and the last good data is kept on disk, so the
 entities keep their values through Avantio outages and Home Assistant restarts.

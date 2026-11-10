@@ -26,6 +26,11 @@
                     "username": "Nom d'utilisateur"
                 }
             }
+        },
+        "error": {
+            "cannot_connect": "Impossible de se connecter",
+            "invalid_auth": "Authentification invalide",
+            "unknown": "Une erreur inconnue s'est produite"
         }
     },
     "entity": {
