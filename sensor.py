@@ -61,10 +61,7 @@ class TotalEarningsSensor(AvantioEntity, SensorEntity):
     @property
     def extra_state_attributes(self):
         """Return the earnings per year."""
-        return {
-            year: f"{value} €"
-            for year, value in self.coordinator.get_yearly_earnings(self._accommodation_id).items()
-        }
+        return self.coordinator.get_yearly_earnings(self._accommodation_id)
 
 
 class BookingDaysSensor(AvantioEntity, SensorEntity):
