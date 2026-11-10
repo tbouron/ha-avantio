@@ -1,6 +1,9 @@
 {
   "domain": "avantio",
   "name": "Avantio",
+  "categories": [
+    "productivity_information.calendars_todos"
+  ],
   "codeowners": [
     "@tbouron"
   ],
